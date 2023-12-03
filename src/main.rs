@@ -4,7 +4,7 @@ use std::sync::{
 };
 use systemr::{comm, worker};
 fn main() -> std::io::Result<()> {
-    let sock = comm::create_comm(true)?;
+    let mut sock = comm::create_comm(true)?;
     let stop = Arc::new(AtomicBool::new(false));
     let stop_cloned = stop.clone();
     let stop_cloned2 = stop.clone();
@@ -23,11 +23,12 @@ fn main() -> std::io::Result<()> {
 
     let mut child = None;
 
+    //TODO: deal with multiple children
     while !stop.load(Ordering::Acquire) {
-        if let Ok(handle) = sock.wait_client() {
+        if let Ok(sock) = sock.wait_client() {
             let args = worker::WorkerArgs {
                 stop: stop_cloned2,
-                handle,
+                sock,
             };
 
             child = Some(std::thread::spawn(move || worker::run(args)));
@@ -36,7 +37,10 @@ fn main() -> std::io::Result<()> {
     }
 
     if let Some(handle) = child {
-        let _ = handle.join().expect("join child thread failed");
+        if let Err(e) = handle.join() {
+            println!("child panic {:?}", e);
+        }
     }
+
     Ok(())
 }
